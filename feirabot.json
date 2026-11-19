@@ -1,0 +1,766 @@
+[
+    {
+        "id": "c1d4167926b551e6",
+        "type": "tab",
+        "label": "FeiraCircular - FeiraBot GS",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "4c1392907835275e",
+        "type": "telegram receiver",
+        "z": "c1d4167926b551e6",
+        "name": "Receber mensagens",
+        "bot": "58b4976757b7d3c3",
+        "saveDataDir": "C:\\NodeRED_Audios",
+        "filterCommands": false,
+        "hasinput": false,
+        "inputs": 0,
+        "handleallupdates": false,
+        "handleprocessupdates": false,
+        "x": 470,
+        "y": 480,
+        "wires": [
+            [
+                "e77a658dec27c0e2",
+                "10175e18ebf4e645",
+                "33d9ea5ad5672899"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "e77a658dec27c0e2",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "FeiraBot - Comandos e preparar LLM",
+        "func": "const p=msg.payload||{};\nif(p.type==='voice')return null;\nconst channel=msg.channel||'telegram';\nconst chatId=msg.chatId||p.chatId||p.chat?.id||p.message?.chat?.id;\nlet text=String(msg.userText||p.content||p.text||p.message?.text||'').trim();\nif(!chatId)return null;\nmsg.chatId=chatId;msg.channel=channel;msg.userText=text;\nconst key='feiracircular_modo_'+channel+'_'+chatId;\nlet mode=flow.get(key)||'texto';\nfunction direct(content){msg.payload={chatId,type:'message',content};msg.directText=content;return [null,msg];}\nif(/^\\/audio\\b/i.test(text)||/^áudio$/i.test(text)){\n  if(channel==='web')return direct('No Webchat, as respostas são em texto. No Telegram, use /audio.');\n  flow.set(key,'audio');return direct('Preferência alterada: vou responder em áudio.');\n}\nif(/^\\/texto\\b/i.test(text)||/^texto$/i.test(text)){flow.set(key,'texto');return direct('Preferência alterada: vou responder em texto.');}\nif(/^\\/start\\b/i.test(text)||/^ajuda$/i.test(text))return direct('Olá! Sou o FeiraBot, assistente do projeto FeiraCircular. Posso explicar ofertas, reservas, participação de feirantes, doações e localização de feiras. No Telegram use /texto ou /audio.');\nif(!text)return direct('Envie uma pergunta sobre o FeiraCircular.');\nmsg.replyMode=channel==='web'?'texto':mode;\nreturn [msg,null];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 500,
+        "wires": [
+            [
+                "9b76dca22022e63b"
+            ],
+            [
+                "2efed4d75e865ef6"
+            ]
+        ]
+    },
+    {
+        "id": "21411e9ec628d619",
+        "type": "http request",
+        "z": "c1d4167926b551e6",
+        "name": "Consultar LLM (OpenAI API)",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 970,
+        "y": 440,
+        "wires": [
+            [
+                "566a61c75b008ff4",
+                "1b37effde04e4e01",
+                "651907709beed836",
+                "d1e685a04b641102"
+            ]
+        ]
+    },
+    {
+        "id": "fbb57585374ae8f5",
+        "type": "telegram sender",
+        "z": "c1d4167926b551e6",
+        "name": "Enviar resposta de configuração",
+        "bot": "58b4976757b7d3c3",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 1230,
+        "y": 600,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "566a61c75b008ff4",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar resposta do LLM",
+        "func": "\nconst data = msg.payload || {};\n\nconst answer =\n    data.choices?.[0]?.message?.content;\n\nlet content = answer ||\n    \"Desculpe, não consegui formular uma resposta agora. Tente novamente.\";\n\nfunction escapeHTML(text) {\n    return String(text)\n        .replace(/&/g, \"&amp;\")\n        .replace(/</g, \"&lt;\")\n        .replace(/>/g, \"&gt;\");\n}\n\nfunction formatTelegramHTML(text) {\n    let formatted = escapeHTML(text);\n\n    formatted = formatted.replace(\n        /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n        '<a href=\"$2\">$1</a>'\n    );\n\n    formatted = formatted.replace(\n        /\\*\\*(.*?)\\*\\*/gs,\n        \"<b>$1</b>\"\n    );\n\n    formatted = formatted.replace(\n        /(^|[^*])\\*([^*\\n]+)\\*/g,\n        \"$1<i>$2</i>\"\n    );\n\n    return formatted.trim();\n}\n\n// Quando o usuário escolheu áudio,\n// não envia resposta em texto.\nif (msg.channel === \"web\" || msg.replyMode === \"audio\") {\n    return null;\n}\n\n// Resposta normal em texto\nmsg.payload = {\n    chatId: msg.chatId,\n    type: \"message\",\n    content: formatTelegramHTML(content),\n    options: {\n        parse_mode: \"HTML\"\n    }\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1220,
+        "y": 440,
+        "wires": [
+            [
+                "9f5cf995529cba7a"
+            ]
+        ]
+    },
+    {
+        "id": "9f5cf995529cba7a",
+        "type": "telegram sender",
+        "z": "c1d4167926b551e6",
+        "name": "Enviar resposta ao usuário",
+        "bot": "58b4976757b7d3c3",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 1400,
+        "y": 700,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "2f9c24bbf95a86ab",
+        "type": "comment",
+        "z": "c1d4167926b551e6",
+        "name": "Configuração obrigatória",
+        "info": "Configuração obrigatória:\n\n1. Instalar node-red-contrib-telegrambot.\n2. Configurar o token do Telegram.\n3. Configurar GROQ_API_KEY e GEMINI_API_KEY.\n4. Instalar FFmpeg.\n5. Criar a pasta C:\\NodeRED_Audios.\n\nIntegrações implementadas:\n- LLM: Groq\n- STT: Groq Whisper\n- TTS: Gemini\n- Telegram: mensagens de texto e áudio\n- Contexto: comandos /texto e /audio",
+        "x": 770,
+        "y": 1180,
+        "wires": []
+    },
+    {
+        "id": "8612b9b518fd947c",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Adicionar autenticação da API",
+        "func": "const key = env.get(\"GROQ_API_KEY\");\n\nif (!key) {\n    if (msg.channel === \"web\") { msg.statusCode = 503; msg.payload = {reply:\"Configuração pendente: GROQ_API_KEY.\"}; return [null, null, msg]; }\n    msg.payload = {\n        chatId: msg.chatId,\n        type: \"message\",\n        content: \"Configuração pendente: defina GROQ_API_KEY nas variáveis de ambiente do Node-RED.\"\n    };\n    return [null, msg];\n}\n\nmsg.headers = {\n    \"Authorization\": \"Bearer \" + key,\n    \"Content-Type\": \"application/json\"\n};\n\nmsg.payload = msg.llmRequest;\n\nreturn [msg, null];",
+        "outputs": 3,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 380,
+        "wires": [
+            [
+                "21411e9ec628d619"
+            ],
+            [
+                "fbb57585374ae8f5"
+            ],
+            [
+                "b440155307afceaa"
+            ]
+        ]
+    },
+    {
+        "id": "1b37effde04e4e01",
+        "type": "debug",
+        "z": "c1d4167926b551e6",
+        "name": "debug 6",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1040,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "9b50e7e75aa0359e",
+        "type": "file in",
+        "z": "c1d4167926b551e6",
+        "name": "Ler áudio do Telegram",
+        "filename": "filename",
+        "filenameType": "msg",
+        "format": "",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 760,
+        "y": 700,
+        "wires": [
+            [
+                "793851ca3aca903f",
+                "cc76ef0bb9f598a6"
+            ]
+        ]
+    },
+    {
+        "id": "10175e18ebf4e645",
+        "type": "debug",
+        "z": "c1d4167926b551e6",
+        "name": "debug 7",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 700,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "33d9ea5ad5672899",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar arquivo de audio",
+        "func": "\nif (msg.payload.type !== \"voice\" || !msg.payload.path) {\n    return null;\n}\n\nmsg.filename = msg.payload.path;\nmsg.chatId = msg.payload.chatId;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 640,
+        "wires": [
+            [
+                "9b50e7e75aa0359e"
+            ]
+        ]
+    },
+    {
+        "id": "793851ca3aca903f",
+        "type": "debug",
+        "z": "c1d4167926b551e6",
+        "name": "debug 8",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 700,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "cc76ef0bb9f598a6",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar transcrição Groq",
+        "func": "\nconst audio = msg.payload;\nconst apiKey = env.get(\"GROQ_API_KEY\");\n\nif (!Buffer.isBuffer(audio)) {\n    node.error(\"Áudio inválido.\", msg);\n    return null;\n}\n\nif (!apiKey) {\n    node.error(\"GROQ_API_KEY não configurada.\", msg);\n    return null;\n}\n\nconst boundary = \"----NodeREDGroq\" + Date.now();\n\nconst inicio = Buffer.from(\n    \"--\" + boundary + \"\\r\\n\" +\n    'Content-Disposition: form-data; name=\"model\"\\r\\n\\r\\n' +\n    \"whisper-large-v3-turbo\\r\\n\" +\n    \"--\" + boundary + \"\\r\\n\" +\n    'Content-Disposition: form-data; name=\"language\"\\r\\n\\r\\n' +\n    \"pt\\r\\n\" +\n    \"--\" + boundary + \"\\r\\n\" +\n    'Content-Disposition: form-data; name=\"file\"; filename=\"audio.ogg\"\\r\\n' +\n    \"Content-Type: audio/ogg\\r\\n\\r\\n\"\n);\n\nconst fim = Buffer.from(\n    \"\\r\\n--\" + boundary + \"--\\r\\n\"\n);\n\nmsg.payload = Buffer.concat([inicio, audio, fim]);\n\nmsg.headers = {\n    \"Authorization\": \"Bearer \" + apiKey,\n    \"Content-Type\": \"multipart/form-data; boundary=\" + boundary\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 550,
+        "y": 740,
+        "wires": [
+            [
+                "62e55a763ff8b8bd"
+            ]
+        ]
+    },
+    {
+        "id": "62e55a763ff8b8bd",
+        "type": "http request",
+        "z": "c1d4167926b551e6",
+        "name": "Groq-Transcrever audio",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 530,
+        "y": 880,
+        "wires": [
+            [
+                "279a6d1fda510da2",
+                "80feefdb6d17344e"
+            ]
+        ]
+    },
+    {
+        "id": "279a6d1fda510da2",
+        "type": "debug",
+        "z": "c1d4167926b551e6",
+        "name": "debug 9",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 740,
+        "y": 880,
+        "wires": []
+    },
+    {
+        "id": "80feefdb6d17344e",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar texto transcrito",
+        "func": "\nif (msg.statusCode !== 200 || !msg.payload?.text) {\n    node.error(\"Não foi possível transcrever o áudio.\", msg);\n    return null;\n}\n\nconst texto = msg.payload.text.trim();\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: \"message\",\n    content: texto\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 1000,
+        "wires": [
+            [
+                "e77a658dec27c0e2"
+            ]
+        ]
+    },
+    {
+        "id": "8108fdfd559eafa6",
+        "type": "http request",
+        "z": "c1d4167926b551e6",
+        "name": "Gerer audio TTS",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1310,
+        "y": 560,
+        "wires": [
+            [
+                "b5e1e3f21817d385",
+                "8fbaf68c56f3c172"
+            ]
+        ]
+    },
+    {
+        "id": "651907709beed836",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar audio gemini",
+        "func": "\nif (msg.replyMode !== \"audio\") {\n    return null;\n}\n\nconst apiKey = env.get(\"GEMINI_API_KEY\");\n\nif (!apiKey) {\n    node.error(\"GEMINI_API_KEY não configurada.\", msg);\n    return null;\n}\n\nconst data = msg.payload || {};\nconst resposta = data.choices?.[0]?.message?.content;\n\nif (!resposta) {\n    node.error(\"Nenhum texto recebido da LLM.\", msg);\n    return null;\n}\n\nmsg.url =\n    \"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent\";\n\nmsg.headers = {\n    \"x-goog-api-key\": apiKey,\n    \"Content-Type\": \"application/json\"\n};\n\nmsg.payload = {\n    contents: [\n        {\n            parts: [\n                {\n                    text: \"Leia em português brasileiro, com voz natural e acolhedora: \" + resposta\n                }\n            ]\n        }\n    ],\n    generationConfig: {\n        responseModalities: [\"AUDIO\"],\n        speechConfig: {\n            voiceConfig: {\n                prebuiltVoiceConfig: {\n                    voiceName: \"Kore\"\n                }\n            }\n        }\n    }\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1240,
+        "y": 500,
+        "wires": [
+            [
+                "8108fdfd559eafa6"
+            ]
+        ]
+    },
+    {
+        "id": "b5e1e3f21817d385",
+        "type": "debug",
+        "z": "c1d4167926b551e6",
+        "name": "debug 10",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1500,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "8fbaf68c56f3c172",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Converter audio Gemini",
+        "func": "\nif (msg.statusCode !== 200) {\n    node.error(\"Erro na geração de áudio pelo Gemini.\", msg);\n    return null;\n}\n\nconst parte =\n    msg.payload?.candidates?.[0]?.content?.parts?.find(\n        p => p.inlineData?.data\n    );\n\nif (!parte) {\n    node.error(\"O Gemini não retornou dados de áudio.\", msg);\n    return null;\n}\n\nconst audioBase64 = parte.inlineData.data;\nconst mimeType = parte.inlineData.mimeType || \"\";\n\nif (!mimeType.includes(\"audio\")) {\n    node.error(\"Formato de áudio inesperado: \" + mimeType, msg);\n    return null;\n}\n\nmsg.audioBuffer = Buffer.from(audioBase64, \"base64\");\nmsg.audioMimeType = mimeType;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1530,
+        "y": 620,
+        "wires": [
+            [
+                "773e6be4da62bc8f"
+            ]
+        ]
+    },
+    {
+        "id": "773e6be4da62bc8f",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar conversão FFmpeg",
+        "func": "\nconst audio = msg.audioBuffer;\n\nif (!Buffer.isBuffer(audio)) {\n    node.error(\"Áudio do Gemini não encontrado.\", msg);\n    return null;\n}\n\nconst mime = msg.audioMimeType || \"\";\nconst taxa = Number(mime.match(/rate=(\\d+)/)?.[1]) || 24000;\n\nmsg.filename = \"C:\\\\NodeRED_Audios\\\\gemini_\" +\n    msg.chatId + \"_\" + Date.now() + \".pcm\";\n\nmsg.payload = audio;\nmsg.sampleRate = taxa;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1500,
+        "y": 800,
+        "wires": [
+            [
+                "e4af2fdf7b227c0d"
+            ]
+        ]
+    },
+    {
+        "id": "e4af2fdf7b227c0d",
+        "type": "file",
+        "z": "c1d4167926b551e6",
+        "name": "Salvar áudio PCM",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 1490,
+        "y": 900,
+        "wires": [
+            [
+                "259d0457e89077f1"
+            ]
+        ]
+    },
+    {
+        "id": "ba020bf6b908af7d",
+        "type": "exec",
+        "z": "c1d4167926b551e6",
+        "command": "ffmpeg",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Converter PCM para OGG",
+        "x": 1140,
+        "y": 1120,
+        "wires": [
+            [],
+            [],
+            [
+                "6830724f9cfdee51"
+            ]
+        ]
+    },
+    {
+        "id": "259d0457e89077f1",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar comando FFmpeg",
+        "func": "\nconst entrada = msg.filename;\nconst taxa = msg.sampleRate || 24000;\n\nif (!entrada || !entrada.endsWith(\".pcm\")) {\n    node.error(\"Arquivo PCM não encontrado.\", msg);\n    return null;\n}\n\nconst saida = entrada.replace(/\\.pcm$/, \".ogg\");\n\nmsg.audioOgg = saida;\n\nmsg.payload =\n    '-y -f s16le -ar ' + taxa +\n    ' -ac 1 -i \"' + entrada +\n    '\" -c:a libopus -b:a 32k \"' + saida + '\"';\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1480,
+        "y": 980,
+        "wires": [
+            [
+                "ba020bf6b908af7d"
+            ]
+        ]
+    },
+    {
+        "id": "6830724f9cfdee51",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Preparar envio de voz",
+        "func": "\nconst resultado = msg.payload;\nconst caminho = msg.audioOgg;\nconst chatId = msg.chatId;\n\nif (!resultado || resultado.code !== 0) {\n    node.error(\n        \"Erro na conversão FFmpeg. Código: \" +\n        (resultado ? resultado.code : \"desconhecido\"),\n        msg\n    );\n    return null;\n}\n\nif (!caminho || !chatId) {\n    node.error(\"Caminho do áudio ou chatId ausente.\", msg);\n    return null;\n}\n\nmsg.payload = {\n    chatId: chatId,\n    type: \"voice\",\n    content: caminho\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1480,
+        "y": 1140,
+        "wires": [
+            [
+                "9f5cf995529cba7a"
+            ]
+        ]
+    },
+    {
+        "id": "9b76dca22022e63b",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "GS - Identificar intenções e entidades",
+        "func": "\n// FEIRACIRCULAR - GS\n// 5 intenções, 12 exemplos por intenção,\n// 5 entidades com sinônimos e contexto por conversa.\n\n// 1. CATÁLOGO DE INTENÇÕES\nconst catalog = {\n    consultar_ofertas: [\n        \"quais ofertas estão disponíveis\",\n        \"tem alimentos com desconto\",\n        \"quero ver promoções\",\n        \"mostrar ofertas\",\n        \"o que está à venda\",\n        \"tem frutas baratas\",\n        \"como encontro produtos\",\n        \"buscar alimentos disponíveis\",\n        \"quais alimentos posso comprar\",\n        \"ver produtos em oferta\",\n        \"quero economizar na feira\",\n        \"existem ofertas hoje\"\n    ],\n    reservar_alimento: [\n        \"como reservar um alimento\",\n        \"quero fazer uma reserva\",\n        \"posso reservar uma oferta\",\n        \"como funciona a reserva\",\n        \"guardar produto para mim\",\n        \"reservar frutas\",\n        \"quero retirar minha reserva\",\n        \"como retiro o alimento\",\n        \"consigo cancelar a reserva\",\n        \"reserva de alimentos\",\n        \"posso separar uma cesta\",\n        \"onde vejo minhas reservas\"\n    ],\n    cadastrar_feirante: [\n        \"sou feirante e quero participar\",\n        \"como cadastrar minha barraca\",\n        \"quero anunciar alimentos\",\n        \"como criar uma oferta\",\n        \"cadastro de feirante\",\n        \"sou vendedor de feira\",\n        \"como vender excedentes\",\n        \"quero publicar descontos\",\n        \"como o feirante participa\",\n        \"como recuperar parte da renda\",\n        \"cadastrar meus produtos\",\n        \"como divulgar alimentos\"\n    ],\n    doar_alimentos: [\n        \"quero doar alimentos\",\n        \"como funciona a doação\",\n        \"posso doar excedentes\",\n        \"sou uma organização social\",\n        \"como receber doações\",\n        \"destinar alimentos para doação\",\n        \"como doar frutas\",\n        \"qual o papel das ongs\",\n        \"como ajudar instituições\",\n        \"quero cadastrar uma organização\",\n        \"doação de comida\",\n        \"como encaminhar alimentos\"\n    ],\n    localizar_feira: [\n        \"onde fica a feira\",\n        \"quero encontrar uma feira\",\n        \"localizar feiras próximas\",\n        \"quais feiras participam\",\n        \"tem feira no meu bairro\",\n        \"onde retirar os alimentos\",\n        \"buscar feira por região\",\n        \"onde posso comprar\",\n        \"como achar uma barraca\",\n        \"feiras de são paulo\",\n        \"qual endereço da feira\",\n        \"encontrar feirante próximo\"\n    ]\n};\n\n// 2. ENTIDADES E SINÔNIMOS\nconst dictionaries = {\n    categoria_alimento: {\n        fruta: [\n            \"frutas\", \"banana\", \"bananas\", \"maçã\", \"maçãs\",\n            \"laranja\", \"laranjas\", \"mamão\", \"mamões\",\n            \"manga\", \"mangas\", \"uva\", \"uvas\"\n        ],\n        verdura: [\n            \"verduras\", \"alface\", \"alfaces\", \"couve\",\n            \"rúcula\", \"espinafre\"\n        ],\n        legume: [\n            \"legumes\", \"cenoura\", \"cenouras\", \"batata\",\n            \"batatas\", \"abobrinha\", \"abobrinhas\"\n        ],\n        cesta: [\"cestas\", \"kit\", \"kits\", \"combo\", \"combos\"]\n    },\n    perfil_usuario: {\n        feirante: [\"vendedor\", \"barraqueiro\", \"comerciante\"],\n        consumidor: [\"cliente\", \"comprador\", \"morador\"],\n        organizacao_social: [\n            \"ong\", \"ongs\", \"instituição\", \"instituições\",\n            \"associação\", \"entidade social\"\n        ]\n    },\n    acao_plataforma: {\n        comprar: [\"compra\", \"adquirir\", \"pagar\"],\n        reservar: [\n            \"reserva\", \"reservas\", \"separar\", \"guardar\",\n            \"reservando\", \"reservado\"\n        ],\n        doar: [\"doação\", \"doações\", \"destinar\", \"contribuir\"],\n        anunciar: [\"anúncio\", \"publicar\", \"ofertar\"]\n    },\n    condicao_alimento: {\n        excedente: [\"sobra\", \"sobras\", \"não vendido\"],\n        desconto: [\n            \"promoção\", \"promoções\", \"barato\",\n            \"baratos\", \"preço reduzido\"\n        ],\n        doacao: [\"gratuito\", \"doado\", \"sem custo\"]\n    },\n    localidade: {\n        sao_paulo: [\"sp\", \"sampa\", \"cidade de são paulo\"],\n        bairro: [\"região\", \"vizinhança\", \"perto de casa\"],\n        feira: [\"feira livre\", \"barraca\", \"ponto de retirada\"]\n    }\n};\n\n// 3. NORMALIZAÇÃO\nfunction normalize(value) {\n    return String(value || \"\")\n        .normalize(\"NFD\")\n        .replace(/[\\u0300-\\u036f]/g, \"\")\n        .toLowerCase()\n        .replace(/[^a-z0-9 ]/g, \" \")\n        .replace(/\\s+/g, \" \")\n        .trim();\n}\n\nconst originalText = String(msg.userText || \"\");\nconst text = normalize(originalText);\n\nfunction containsTerm(term) {\n    const normalizedTerm = normalize(term);\n    return normalizedTerm.length > 0 &&\n        (\" \" + text + \" \").includes(\" \" + normalizedTerm + \" \");\n}\n\n// 4. IDENTIFICAÇÃO DAS ENTIDADES\nmsg.entities = {};\n\nfor (const [entity, values] of Object.entries(dictionaries)) {\n    for (const [canonical, synonyms] of Object.entries(values)) {\n        if ([canonical, ...synonyms].some(containsTerm)) {\n            msg.entities[entity] = canonical;\n            break;\n        }\n    }\n}\n\n// 5. IDENTIFICAÇÃO DAS INTENÇÕES\nconst scores = {};\n\nfor (const intent of Object.keys(catalog)) {\n    scores[intent] = 0;\n}\n\n// Exemplos cadastrados continuam sendo utilizados.\nfor (const [intent, examples] of Object.entries(catalog)) {\n    for (const example of examples) {\n        const phrase = normalize(example);\n\n        if (text === phrase) {\n            scores[intent] += 100;\n        } else if (text.includes(phrase)) {\n            scores[intent] += 60;\n        }\n    }\n}\n\n// Regras para reconhecer variações de frases.\nconst rules = {\n    consultar_ofertas: [\n        /\\b(ofertas?|promocoes?|descontos?)\\b/,\n        /\\b(consultar|buscar|mostrar|ver)\\b.*\\b(produtos?|alimentos?)\\b/,\n        /\\b(frutas?|legumes?|verduras?)\\b.*\\b(barat[oa]s?|disponiveis?)\\b/\n    ],\n    reservar_alimento: [\n        /\\b(reservar|reserva|reservas|reservado|reservando)\\b/,\n        /\\b(cancelar|cancelamento)\\b.*\\b(reserva|pedido)\\b/,\n        /\\b(retirar|retirada|retiro)\\b.*\\b(alimento|produto|reserva|pedido)\\b/,\n        /\\b(separar|guardar)\\b.*\\b(frutas?|alimentos?|produtos?|cesta)\\b/\n    ],\n    cadastrar_feirante: [\n        /\\b(feirante|barraqueiro|vendedor)\\b.*\\b(cadastrar|participar|anunciar|vender)\\b/,\n        /\\b(cadastrar|anunciar|publicar|vender)\\b.*\\b(barraca|produtos?|alimentos?|excedentes?)\\b/,\n        /\\b(cadastro de feirante)\\b/\n    ],\n    doar_alimentos: [\n        /\\b(doar|doacao|doacoes)\\b/,\n        /\\b(ongs?|instituicoes?|organizacao social)\\b/,\n        /\\b(destinar)\\b.*\\b(alimentos?|excedentes?)\\b/\n    ],\n    localizar_feira: [\n        /\\b(localizar|encontrar|achar|buscar)\\b.*\\b(feiras?|barracas?)\\b/,\n        /\\b(onde fica|qual endereco|feira proxima)\\b/,\n        /\\b(feiras?)\\b.*\\b(bairro|regiao|perto|proxima)\\b/\n    ]\n};\n\nfor (const [intent, patterns] of Object.entries(rules)) {\n    for (const pattern of patterns) {\n        if (pattern.test(text)) {\n            scores[intent] += 50;\n        }\n    }\n}\n\n// Regras complementares com entidades.\nif (msg.entities.acao_plataforma === \"reservar\") {\n    scores.reservar_alimento += 30;\n}\nif (msg.entities.acao_plataforma === \"doar\") {\n    scores.doar_alimentos += 30;\n}\nif (msg.entities.acao_plataforma === \"anunciar\") {\n    scores.cadastrar_feirante += 30;\n}\nif (msg.entities.condicao_alimento === \"desconto\") {\n    scores.consultar_ofertas += 20;\n}\n\n// Escolhe a intenção com maior pontuação.\nconst ranking = Object.entries(scores)\n    .sort((a, b) => b[1] - a[1]);\n\nconst best = ranking[0];\n\nmsg.intent = best && best[1] > 0 ? best[0] : \"fallback\";\nmsg.intentScore = best && best[1] > 0 ? best[1] : 0;\n\n// 6. CONTEXTO POR USUÁRIO E CANAL\nconst key = \"feiracircular_contexto_\" +\n    (msg.channel || \"telegram\") + \"_\" +\n    String(msg.chatId || \"anonimo\");\n\nconst previous = flow.get(key) || {};\n\nmsg.contextoAnterior = previous;\n\n// Mantém a intenção anterior quando a pergunta\n// é uma continuação sem intenção reconhecida.\nconst continuation = /^(e |mas |entao |depois |como faco |e se )/.test(text);\n\nif (\n    msg.intent === \"fallback\" &&\n    continuation &&\n    previous.intent &&\n    previous.intent !== \"fallback\"\n) {\n    msg.intent = previous.intent;\n    msg.intentScore = 10;\n    msg.contextoHerdado = true;\n} else {\n    msg.contextoHerdado = false;\n}\n\n// Atualiza o contexto.\nflow.set(key, {\n    intent: msg.intent,\n    entities: {\n        ...(previous.entities || {}),\n        ...msg.entities\n    },\n    ultimaPergunta: originalText\n});\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 240,
+        "wires": [
+            [
+                "664ca79451ca7526",
+                "1ca8e8c414622694"
+            ]
+        ]
+    },
+    {
+        "id": "664ca79451ca7526",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "FeiraBot - Prompt e requisição Groq",
+        "func": "const intentLabels={consultar_ofertas:'consultar ofertas',reservar_alimento:'reservar alimentos',cadastrar_feirante:'cadastrar feirantes',doar_alimentos:'doar alimentos',localizar_feira:'localizar feiras'};\nconst system=`Você é o FeiraBot, assistente do projeto acadêmico FeiraCircular, em São Paulo. Responda em português brasileiro, com clareza e objetividade. O projeto busca reduzir desperdício de alimentos em feiras livres, com modelo híbrido: feirantes podem anunciar excedentes com desconto para recuperar parte da renda, consumidores podem encontrar ofertas e reservar alimentos, e organizações sociais podem receber alimentos destinados a doação. A plataforma é um protótipo acadêmico; não afirme que ofertas, cadastros, reservas, estoques, horários, pagamentos, endereços ou retiradas reais já estão disponíveis. Não invente valores, locais, datas ou funcionalidades implementadas. Explique o funcionamento proposto e diga que dados reais dependem da implantação. As cinco áreas de atendimento são: ofertas, reservas, cadastro de feirantes, doações e localização de feiras. Quando não houver dados, diga isso explicitamente. Não peça CPF, endereço ou outros dados sensíveis. Intenção detectada (classificação aproximada por exemplos): ${intentLabels[msg.intent]||'não identificada'}. Entidades detectadas: ${JSON.stringify(msg.entities)}. Última intenção na conversa: ${msg.contextoAnterior?.intent||'nenhuma'}. Se a pergunta for ambígua, peça esclarecimento.`;\nmsg.llmRequest={model:'openai/gpt-oss-20b',messages:[{role:'system',content:system},{role:'user',content:msg.userText}],temperature:0.2};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1070,
+        "y": 240,
+        "wires": [
+            [
+                "8612b9b518fd947c"
+            ]
+        ]
+    },
+    {
+        "id": "2efed4d75e865ef6",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Enviar comando por canal",
+        "func": "if(msg.channel==='web'){msg.payload={reply:msg.directText||msg.payload?.content||'',intent:'comando',entities:{}};return [null,msg];}return [msg,null];",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 950,
+        "y": 560,
+        "wires": [
+            [
+                "fbb57585374ae8f5"
+            ],
+            [
+                "b440155307afceaa"
+            ]
+        ]
+    },
+    {
+        "id": "d1e685a04b641102",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - Resposta da LLM",
+        "func": "if(msg.channel!=='web')return null;\nconst reply=msg.payload?.choices?.[0]?.message?.content||'Não consegui responder agora.';\nmsg.payload={reply,intent:msg.intent,entities:msg.entities};return msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1410,
+        "y": 220,
+        "wires": [
+            [
+                "b440155307afceaa"
+            ]
+        ]
+    },
+    {
+        "id": "228d762822cd3d20",
+        "type": "http in",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - Abrir página",
+        "url": "/feirabot",
+        "method": "get",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 500,
+        "y": 1400,
+        "wires": [
+            [
+                "d8a40a0480341665"
+            ]
+        ]
+    },
+    {
+        "id": "d8a40a0480341665",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - HTML",
+        "func": "msg.headers={\"Content-Type\":\"text/html; charset=utf-8\"};msg.payload=\"<!doctype html><html lang=\\\"pt-BR\\\"><head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><title>FeiraBot | FeiraCircular</title><style>body{font:16px Arial,sans-serif;background:#f4f7f2;margin:0;padding:25px;color:#173c27}.app{max-width:720px;margin:auto;background:white;border-radius:14px;padding:24px;box-shadow:0 4px 20px #0001}h1{margin-top:0}#messages{height:370px;overflow:auto;border:1px solid #ddd;padding:12px;border-radius:8px;white-space:pre-wrap}.bubble{margin:10px 0;padding:10px 12px;border-radius:10px;background:#edf4e9}.mine{background:#d9ecff}form{display:flex;gap:8px;margin-top:12px}input{flex:1;padding:12px;font-size:16px}button{padding:12px;background:#216b3a;color:white;border:0;border-radius:6px;cursor:pointer}</style></head><body><main class=\\\"app\\\"><h1>🌿 FeiraBot</h1><p>Assistente do projeto acadêmico FeiraCircular. Ofertas e reservas são demonstrativas.</p><div id=\\\"messages\\\" aria-live=\\\"polite\\\"></div><form id=\\\"f\\\"><input id=\\\"q\\\" placeholder=\\\"Pergunte sobre ofertas, reservas, doações...\\\" required autocomplete=\\\"off\\\"><button>Enviar</button></form></main><script>const key='feirabot_session';let sid=sessionStorage.getItem(key);if(!sid){sid=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());sessionStorage.setItem(key,sid)}const m=document.getElementById('messages');function show(w,t){let d=document.createElement('div');d.className='bubble '+(w==='Você'?'mine':'');d.textContent=w+': '+t;m.appendChild(d);m.scrollTop=m.scrollHeight}show('FeiraBot','Olá! Posso explicar como funcionará o FeiraCircular.');document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const q=document.getElementById('q'),t=q.value.trim();if(!t)return;show('Você',t);q.value='';try{const r=await fetch('/feirabot/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sid,message:t})});const data=await r.json();show('FeiraBot',data.reply||'Não foi possível responder.')}catch(e){show('FeiraBot','Erro de conexão. Verifique o Node-RED.')}})</script></body></html>\";return msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 1400,
+        "wires": [
+            [
+                "c1648f29ba08b0e8"
+            ]
+        ]
+    },
+    {
+        "id": "c1648f29ba08b0e8",
+        "type": "http response",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - Entregar página",
+        "statusCode": "",
+        "headers": {},
+        "x": 1020,
+        "y": 1400,
+        "wires": []
+    },
+    {
+        "id": "6eeadae27ef5d1b3",
+        "type": "http in",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - Receber pergunta",
+        "url": "/feirabot/api",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 510,
+        "y": 1480,
+        "wires": [
+            [
+                "7e385bca1157616f"
+            ]
+        ]
+    },
+    {
+        "id": "7e385bca1157616f",
+        "type": "function",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - Preparar entrada",
+        "func": "const p=msg.payload||{};const text=String(p.message||'').trim().slice(0,1500);const session=String(p.sessionId||'').replace(/[^a-zA-Z0-9-]/g,'').slice(0,80);if(!session||!text){msg.statusCode=400;msg.payload={reply:'Mensagem ou sessão inválida.'};return [null,msg];}msg.channel='web';msg.chatId=session;msg.userText=text;msg.payload={chatId:session,type:'message',content:text};return [msg,null];",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 780,
+        "y": 1480,
+        "wires": [
+            [
+                "e77a658dec27c0e2"
+            ],
+            [
+                "b440155307afceaa"
+            ]
+        ]
+    },
+    {
+        "id": "b440155307afceaa",
+        "type": "http response",
+        "z": "c1d4167926b551e6",
+        "name": "Webchat - Enviar resposta",
+        "statusCode": "",
+        "headers": {},
+        "x": 1710,
+        "y": 1400,
+        "wires": []
+    },
+    {
+        "id": "58eb4e1499656ae4",
+        "type": "comment",
+        "z": "c1d4167926b551e6",
+        "name": "GS - Intenções e entidades (catálogo)",
+        "info": "5 intenções com 12 exemplos cada e 5 entidades com sinônimos no nó \"GS - Identificar intenções e entidades\". Classificação por regras de correspondência, não treinamento de NLU. Contexto por usuário em flow context. Webchat: http://localhost:1880/feirabot. A interface Webchat oferece texto; Telegram oferece texto/voz. Projeto demonstrativo sem dados reais de ofertas. Configure token do bot FeiraCircular separadamente e GROQ_API_KEY / GEMINI_API_KEY no ambiente. Desative o receptor da Turma do Bem se ele compartilhar credenciais. O receptor FeiraBot começa desativado até a configuração do novo token.",
+        "x": 740,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "1ca8e8c414622694",
+        "type": "debug",
+        "z": "c1d4167926b551e6",
+        "name": "debug 11",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 840,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "58b4976757b7d3c3",
+        "type": "telegram bot",
+        "botname": "FeiraCircularBot",
+        "usernames": "",
+        "chatids": "",
+        "baseapiurl": "",
+        "testenvironment": false,
+        "updatemode": "polling",
+        "pollinterval": "300",
+        "usesocks": false,
+        "sockshost": "",
+        "socksprotocol": "socks5",
+        "socksport": "1080",
+        "socksusername": "",
+        "sockspassword": "",
+        "bothost": "",
+        "botpath": "",
+        "localbothost": "",
+        "localbotport": "",
+        "publicbotport": "",
+        "privatekey": "",
+        "certificate": "",
+        "useselfsignedcertificate": false,
+        "sslterminated": false,
+        "verboselogging": false
+    },
+    {
+        "id": "286b50d66777938f",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-telegrambot": "19.0.3"
+        }
+    }
+]
